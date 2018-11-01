@@ -2,38 +2,59 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const jwt = require('jsonwebtoken')
-var steem = require('steem');
+const crypto = require('crypto')
+const fs = require('fs')
+const steem = require('steem');
+const path = require('path');
+
 const urlencodeParser = bodyParser.urlencoded({ extended: false })
 
 const app = express()
 app.use(bodyParser.json())
 
-app.post('/api/login', urlencodeParser, async (req, res) => {
-	console.log("AAAAAAAAAA");
-  var username = req.body.username;
-  var password = req.body.password;
+var secret = require("./private.json")['secret'];
+var currentDate = Date.now();
+var secretWithDate = currentDate + secret;
+const hmac = crypto.createHash('sha256').update(secretWithDate).digest('hex');
 
-
-  // get posting public key
-  const account = await steem.api.getAccountsAsync([ username ])
-  console.log(account);
-  const pubKey = account[0].posting.key_auths[0][0]
-
-  // 
-  // for a given username/password combo,
-  // response contains { posting: 'private key', postingPubkey: 'pub key' }
-  // 
-  const { posting } = steem.auth.getPrivateKeys(username, password, ['posting'])
-  //
-  // See if the private key is a match to the public key
-  const isValid = steem.auth.wifIsValid(posting, pubKey)
-   
-  if (isValid) {
-    res.json({ username })
+function verifyToken(req, res, next) {
+  const bearerHeader = req.headers['authorization']
+  if (typeof bearerHeader !== 'undefined') {
+    const bearer = bearerHeader.split(' ')
+    req.token = bearer[1]
+    next()
   } else {
     res.sendStatus(403)
+  }
 }
-  res.sendStatus(403)
+app.listen(3001, () => console.log('Listening on port 3001.'))
+app.post('/api/login', urlencodeParser, async (req, res) => {
+  const username = "mushikhan"
+  const password = "TqfVEPYHXgvETNTSc2NzGFVi8HSUMVD7"
+  console.log(username)
+  console.log(password)
+    const account = await steem.api.getAccountsAsync([ username ])
+  const pubKey = account[0].posting.key_auths[0][0]
+  const { posting } = steem.auth.getPrivateKeys(username, password, ['posting'])
+  const isValid = steem.auth.wifIsValid(posting, pubKey)
+  if (isValid) {
+    jwt.sign({ username }, hmac, (err, token) => {
+      if (err) {
+        throw err 
+        }
+      res.json({ token })
+    })
+
+  } else {
+    res.sendStatus(403)
+  }
 })
 
-app.listen(3001, () => console.log('Listening on port 5000.'))
+app.post('/api/posts', verifyToken, (req, res) => {
+  jwt.verify(req.token, hmac, (err, auth) => {
+    if (err) res.sendStatus(403, { err })
+
+    res.json({ auth })
+  })
+})
+
