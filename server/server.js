@@ -7,10 +7,9 @@ const fs = require('fs')
 const steem = require('steem');
 const path = require('path');
 
-const urlencodeParser = bodyParser.urlencoded({ extended: false })
 
 const app = express()
-app.use(bodyParser.json())
+const urlencodeParser = bodyParser.urlencoded({extended: false})
 
 var secret = require("./private.json")['secret'];
 var currentDate = Date.now();
@@ -28,21 +27,26 @@ function verifyToken(req, res, next) {
   }
 }
 app.listen(3001, () => console.log('Listening on port 3001.'))
-app.post('/api/login', urlencodeParser, async (req, res) => {
+app.post('/login', urlencodeParser, async (req, res) => {
   const username = "mushikhan"
   const password = "TqfVEPYHXgvETNTSc2NzGFVi8HSUMVD7"
-  console.log(username)
-  console.log(password)
-    const account = await steem.api.getAccountsAsync([ username ])
+  const account = await steem.api.getAccountsAsync([ username ])
   const pubKey = account[0].posting.key_auths[0][0]
-  const { posting } = steem.auth.getPrivateKeys(username, password, ['posting'])
+
+  console.log("**************************")
+  var a = account[0].json_metadata
+   const imageUrl = JSON.parse(account[0].json_metadata)['profile']['profile_image']
+ 
+   const { posting } = steem.auth.getPrivateKeys(username, password, ['posting'])
   const isValid = steem.auth.wifIsValid(posting, pubKey)
   if (isValid) {
     jwt.sign({ username }, hmac, (err, token) => {
       if (err) {
+        console.log('error')
         throw err 
         }
-      res.json({ token })
+      res.send({ token, posting, username, imageUrl
+      })
     })
 
   } else {
@@ -53,7 +57,6 @@ app.post('/api/login', urlencodeParser, async (req, res) => {
 app.post('/api/posts', verifyToken, (req, res) => {
   jwt.verify(req.token, hmac, (err, auth) => {
     if (err) res.sendStatus(403, { err })
-
     res.json({ auth })
   })
 })
